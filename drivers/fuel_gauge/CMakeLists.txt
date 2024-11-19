@@ -1,0 +1,3 @@
+zephyr_amend_library()
+
+add_subdirectory_ifdef(CONFIG_SAMPLE_BMS sample_bms)

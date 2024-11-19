@@ -1,80 +1,67 @@
 /*
- * Copyright (c) 2021 Nordic Semiconductor ASA
+ * Copyright (c) 2023 Alvaro Garcia Gomez <maxpowel@gmail.com>
+ *
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "zephyr/sys/util.h"
 #include <zephyr/kernel.h>
-#include <zephyr/drivers/sensor.h>
-#include <zephyr/logging/log.h>
+#include <zephyr/device.h>
+#include <zephyr/devicetree.h>
+#include <zephyr/drivers/fuel_gauge.h>
 
-#include <app/drivers/blink.h>
 
-#include <app_version.h>
-
-LOG_MODULE_REGISTER(main, CONFIG_APP_LOG_LEVEL);
-
-#define BLINK_PERIOD_MS_STEP 100U
-#define BLINK_PERIOD_MS_MAX  1000U
 
 int main(void)
 {
-	int ret;
-	unsigned int period_ms = BLINK_PERIOD_MS_MAX;
-	const struct device *sensor, *blink;
-	struct sensor_value last_val = { 0 }, val;
+	const struct device *const dev = DEVICE_DT_GET_ANY(sample_bms);
+	int ret = 0;
 
-	printk("Zephyr Example Application %s\n", APP_VERSION_STRING);
-
-	sensor = DEVICE_DT_GET(DT_NODELABEL(example_sensor));
-	if (!device_is_ready(sensor)) {
-		LOG_ERR("Sensor not ready");
+	if (dev == NULL) {
+		printk("\nError: no device found.\n");
 		return 0;
 	}
 
-	blink = DEVICE_DT_GET(DT_NODELABEL(blink_led));
-	if (!device_is_ready(blink)) {
-		LOG_ERR("Blink LED not ready");
+	if (!device_is_ready(dev)) {
+		printk("\nError: Device \"%s\" is not ready; "
+		       "check the driver initialization logs for errors.\n",
+		       dev->name);
 		return 0;
 	}
 
-	ret = blink_off(blink);
-	if (ret < 0) {
-		LOG_ERR("Could not turn off LED (%d)", ret);
+
+
+	printk("Found device \"%s\", getting fuel gauge data\n", dev->name);
+
+	if (dev == NULL) {
 		return 0;
 	}
-
-	printk("Use the sensor to change LED blinking period\n");
 
 	while (1) {
-		ret = sensor_sample_fetch(sensor);
+
+		fuel_gauge_prop_t props[] = {
+			FUEL_GAUGE_RUNTIME_TO_EMPTY,
+			FUEL_GAUGE_RUNTIME_TO_FULL,
+			FUEL_GAUGE_RELATIVE_STATE_OF_CHARGE,
+			FUEL_GAUGE_VOLTAGE,
+		};
+
+		union fuel_gauge_prop_val vals[ARRAY_SIZE(props)];
+
+		ret = fuel_gauge_get_props(dev, props, vals, ARRAY_SIZE(props));
 		if (ret < 0) {
-			LOG_ERR("Could not fetch sample (%d)", ret);
-			return 0;
+			printk("Error: cannot get properties\n");
+		} else {
+			printk("Time to empty %d minutes\n", vals[0].runtime_to_empty);
+
+			printk("Time to full %d minutes\n", vals[1].runtime_to_full);
+
+			printk("Charge %d%%\n", vals[2].relative_state_of_charge);
+
+			printk("Voltage %d\n uV", vals[3].voltage);
 		}
 
-		ret = sensor_channel_get(sensor, SENSOR_CHAN_PROX, &val);
-		if (ret < 0) {
-			LOG_ERR("Could not get sample (%d)", ret);
-			return 0;
-		}
-
-		if ((last_val.val1 == 0) && (val.val1 == 1)) {
-			if (period_ms == 0U) {
-				period_ms = BLINK_PERIOD_MS_MAX;
-			} else {
-				period_ms -= BLINK_PERIOD_MS_STEP;
-			}
-
-			printk("Proximity detected, setting LED period to %u ms\n",
-			       period_ms);
-			blink_set_period_ms(blink, period_ms);
-		}
-
-		last_val = val;
-
-		k_sleep(K_MSEC(100));
+		k_sleep(K_MSEC(5000));
 	}
-
 	return 0;
 }
-

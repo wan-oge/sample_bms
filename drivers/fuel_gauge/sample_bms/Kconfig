@@ -1,0 +1,6 @@
+config SAMPLE_BMS
+    bool "Sample BMS"
+    depends on DT_HAS_SAMPLE_BMS_ENABLED
+    select I2C
+    help
+      Sample BMS driver for battery gauge.

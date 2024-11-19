@@ -1,0 +1,6 @@
+&i2c1 {
+    bms: sample_bms@36 {
+        compatible = "sample-bms";
+        reg = <0x36>;
+    };
+};
